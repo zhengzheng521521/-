@@ -1,0 +1,70 @@
+clear; 
+clc; 
+close all;
+
+img = imread('1.jpg'); 
+
+if isempty(img)
+    error('Image file not found!');
+end
+
+figure('Name', 'Floss Detection - Anti-Glare', 'Color', 'w');
+
+gray_img = rgb2gray(img);
+
+bw = imbinarize(gray_img, 'adaptive', 'Sensitivity', 0.45, 'ForegroundPolarity', 'bright');
+
+subplot(2, 2, 1); imshow(gray_img); title('Original Gray');
+subplot(2, 2, 2); imshow(bw); title('Adaptive Binary');
+
+se_noise = strel('disk', 2);
+bw_clean = imopen(bw, se_noise);
+
+se_connect = strel('line', 5, 0); 
+bw_clean = imclose(bw_clean, se_connect);
+bw_clean = imclose(bw_clean, strel('line', 5, 90));
+
+min_area = 2000; 
+max_area = 25000; 
+
+stats_raw = regionprops(bw_clean, 'Area', 'BoundingBox', 'Centroid', 'PixelList');
+
+valid_idx = [];
+for k = 1:length(stats_raw)
+    area = stats_raw(k).Area;
+    
+    if area > min_area && area < max_area
+        valid_idx = [valid_idx, k];
+    end
+end
+
+bw_final = ismember(bw_clean, valid_idx);
+final_stats = stats_raw(valid_idx);
+final_count = length(final_stats);
+
+subplot(2, 2, 3); imshow(bw_final); title('Filtered Mask');
+
+display_img = img;
+
+fprintf('----------------------------------------\n');
+fprintf('Detection Report:\n');
+fprintf('Total items detected: %d\n', final_count);
+fprintf('----------------------------------------\n');
+
+for k = 1:final_count
+    bbox = final_stats(k).BoundingBox;
+    centroid = final_stats(k).Centroid;
+    
+    rectangle('Position', bbox, 'EdgeColor', 'r', 'LineWidth', 2);
+    
+    text(centroid(1), centroid(2)-20, sprintf('#%d', k), ...
+         'Color', 'y', 'FontSize', 14, 'FontWeight', 'bold', ...
+         'HorizontalAlignment', 'center');
+         
+    fprintf('Item #%d -> Center Coordinate (x, y): (%.2f, %.2f)\n', ...
+            k, centroid(1), centroid(2));
+end
+
+subplot(2, 2, 4); imshow(display_img); 
+title(sprintf('Final Result: Count = %d', final_count));
+fprintf('----------------------------------------\n');
